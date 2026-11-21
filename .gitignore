@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# Never commit logins or server data
+*.htpasswd
+.htpasswd
+history.json.gz
+scan.json.gz
+*.tmp
+
+# Packaging / OS junk
+*.tar.gz
+.DS_Store

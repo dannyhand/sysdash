@@ -1,0 +1,33 @@
+[Unit]
+Description=sysdash server dashboard backend
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/sysdash/sysdash.py --host 127.0.0.1 --port 8765 --root /
+Restart=on-failure
+RestartSec=5
+
+# Unprivileged user. CAP_DAC_READ_SEARCH lets the disk scanner list and stat
+# every directory (needed for an accurate space map) without being root.
+# It can read, never write, anything outside its own state dir.
+User=sysdash
+Group=sysdash
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+
+# History + last scan live in /var/lib/sysdash
+StateDirectory=sysdash
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Keep the disk scan from getting in the way of your sites
+IOSchedulingClass=idle
+MemoryMax=250M
+
+[Install]
+WantedBy=multi-user.target

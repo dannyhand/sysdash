@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f3f2ef;
+  --surface-1: #fcfcfb;
+  --surface-2: #eeede9;
+  --surface-3: #e2e1dc;
+  --border:    #dcdbd5;
+  --grid:      #e6e5e0;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #7a7973;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
+  --tm-other: #a9a8a2; --tm-dir: #8d8c86; --tm-free: #d7d6d0; --tm-unacc: #c3c2bb;
+  --ok: #1d8f3a; --bad: #c62f2f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #242422; --surface-3: #2e2e2b;
+    --border: #353532; --grid: #2a2a28;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #0ca30c; --series-7: #9085e9; --series-8: #e66767;
+    --tm-other: #6d6c66; --tm-dir: #85847d; --tm-free: #3a3a37; --tm-unacc: #4a4a46;
+    --ok: #3fbf5f; --bad: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #242422; --surface-3: #2e2e2b;
+  --border: #353532; --grid: #2a2a28;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #0ca30c; --series-7: #9085e9; --series-8: #e66767;
+  --tm-other: #6d6c66; --tm-dir: #85847d; --tm-free: #3a3a37; --tm-unacc: #4a4a46;
+  --ok: #3fbf5f; --bad: #e66767;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+.num { font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1500px; margin: 0 auto; padding: 16px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-bottom: 14px; }
+header h1 { font-size: 20px; margin: 0; font-weight: 650; }
+header .meta { color: var(--text-secondary); font-size: 13px; }
+.spacer { flex: 1; }
+.uptime { font-size: 15px; }
+.uptime b { font-weight: 650; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.status.offline .dot { background: var(--bad); }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+.seg button { border: 0; background: transparent; color: var(--text-secondary); padding: 6px 11px;
+  font: inherit; font-size: 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text-primary); font-weight: 600; }
+.btn { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.btn:disabled { opacity: .55; cursor: default; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.tile .value { font-size: 26px; font-weight: 650; margin-top: 2px; white-space: nowrap; }
+.tile .value small { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.tile .sub { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.meter { height: 6px; border-radius: 3px; background: var(--surface-3); margin-top: 8px; overflow: hidden; }
+.meter > i { display: block; height: 100%; width: 0; background: var(--series-1); border-radius: 3px; transition: width .4s; }
+
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 10px; margin-bottom: 12px; }
+@media (max-width: 480px) { .charts { grid-template-columns: 1fr; } .wrap { padding: 10px; } .tile .value { font-size: 22px; } .cbox { height: 150px; } }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 8px; min-width: 0; }
+.card h2 { font-size: 14px; margin: 0; font-weight: 600; }
+.chead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend b { color: var(--text-primary); font-weight: 600; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.cbox { position: relative; height: 170px; touch-action: pan-y; }
+.cbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 13px; pointer-events: none; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  white-space: nowrap; z-index: 5; display: none; }
+.tip .tt { color: var(--text-secondary); margin-bottom: 3px; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.tip .row b { margin-left: auto; padding-left: 10px; font-weight: 600; }
+
+.tmcard { padding-bottom: 12px; }
+.tmbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-size: 13px; }
+.crumbs a { color: var(--series-1); cursor: pointer; text-decoration: none; padding: 1px 3px; border-radius: 4px; }
+.crumbs a:hover { background: var(--surface-2); }
+.crumbs .sep { color: var(--text-muted); }
+.usage { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--tm-free); margin: 4px 0 10px; gap: 2px; }
+.usage i { display: block; height: 100%; }
+.tmbox { position: relative; height: min(62vh, 620px); min-height: 320px; border-radius: 6px; overflow: hidden;
+  background: var(--surface-2); touch-action: manipulation; }
+.tmbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tminfo { min-height: 40px; margin-top: 8px; font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.tminfo .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+.tminfo .muted, .muted { color: var(--text-muted); }
+.extleg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+.extleg span { display: inline-flex; align-items: center; gap: 5px; }
+footer { color: var(--text-muted); font-size: 12px; margin: 14px 0 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="host">Server</h1>
+      <div class="meta" id="sysmeta">connecting…</div>
+    </div>
+    <div class="uptime num">Uptime <b id="uptime">–</b></div>
+    <div class="spacer"></div>
+    <div class="seg" id="ranges" role="group" aria-label="History range"></div>
+    <button class="btn" id="theme" title="Toggle light/dark">◐</button>
+    <span class="status" id="status"><span class="dot"></span><span id="statustext">connecting</span></span>
+  </header>
+
+  <section class="tiles">
+    <div class="tile"><div class="label">CPU</div><div class="value num" id="v-cpu">–</div>
+      <div class="sub num" id="s-cpu">&nbsp;</div><div class="meter"><i id="m-cpu"></i></div></div>
+    <div class="tile"><div class="label">Memory</div><div class="value num" id="v-mem">–</div>
+      <div class="sub num" id="s-mem">&nbsp;</div><div class="meter"><i id="m-mem"></i></div></div>
+    <div class="tile"><div class="label">Swap</div><div class="value num" id="v-swap">–</div>
+      <div class="sub num" id="s-swap">&nbsp;</div><div class="meter"><i id="m-swap"></i></div></div>
+    <div class="tile"><div class="label">Network</div><div class="value num" id="v-net">–</div>
+      <div class="sub num" id="s-net">&nbsp;</div></div>
+    <div class="tile"><div class="label">Disk I/O</div><div class="value num" id="v-dio">–</div>
+      <div class="sub num" id="s-dio">&nbsp;</div><div class="meter"><i id="m-dio"></i></div></div>
+    <div class="tile"><div class="label">Disk space</div><div class="value num" id="v-disk">–</div>
+      <div class="sub num" id="s-disk">&nbsp;</div><div class="meter"><i id="m-disk"></i></div></div>
+  </section>
+
+  <section class="charts" id="charts"></section>
+
+  <section class="card tmcard">
+    <div class="tmbar">
+      <h2>Disk space map</h2>
+      <div class="crumbs" id="crumbs"></div>
+      <div class="spacer"></div>
+      <label class="muted" style="font-size:13px"><input type="checkbox" id="showfree" checked> show free space</label>
+      <span class="muted num" id="scanmeta" style="font-size:12px"></span>
+      <button class="btn" id="rescan">Rescan</button>
+    </div>
+    <div class="usage" id="usage" title=""></div>
+    <div class="tmbox" id="tmbox">
+      <canvas id="tm"></canvas><canvas id="tmo"></canvas>
+      <div class="empty" id="tmempty">Waiting for first disk scan…</div>
+    </div>
+    <div class="tminfo" id="tminfo"><span class="muted">Hover or tap a block for details. Double-click (or use the button) to zoom into a folder.</span></div>
+    <div class="extleg" id="extleg"></div>
+  </section>
+
+  <footer id="foot">Samples every 3 s. Longer ranges show averages per bucket.</footer>
+</div>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ helpers
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const SERIES = (n) => css("--series-" + n);
+const UNITS = ["B", "KB", "MB", "GB", "TB", "PB"];
+function fmtBytes(b, digits) {
+  if (b == null || !isFinite(b)) return "–";
+  let i = 0, v = Math.abs(b);
+  while (v >= 1024 && i < UNITS.length - 1) { v /= 1024; i++; }
+  const d = digits != null ? digits : (v >= 100 || i === 0 ? 0 : v >= 10 ? 1 : 2);
+  return (b < 0 ? "-" : "") + v.toFixed(d) + " " + UNITS[i];
+}
+const fmtRate = (b) => fmtBytes(b) + "/s";
+const fmtPct = (p, d) => (p == null || !isFinite(p) ? "–" : p.toFixed(d == null ? (p < 10 ? 1 : 0) : d) + "%");
+const pad2 = (n) => String(n).padStart(2, "0");
+function fmtClock(t, withSec) {
+  const d = new Date(t * 1000);
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + (withSec ? ":" + pad2(d.getSeconds()) : "");
+}
+function fmtUptime(s) {
+  s = Math.floor(s);
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (d ? d + "d " : "") + pad2(h) + ":" + pad2(m) + ":" + pad2(x);
+}
+function fmtAgo(sec) {
+  if (sec < 90) return Math.round(sec) + " s ago";
+  if (sec < 5400) return Math.round(sec / 60) + " min ago";
+  if (sec < 172800) return (sec / 3600).toFixed(1) + " h ago";
+  return Math.round(sec / 86400) + " days ago";
+}
+function niceNum(x) {  // 1, 2, 2.5, 5, 10 x 10^n, rounding up
+  if (x <= 0) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(x))), f = x / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+}
+function bytesCeil(max) {  // axis max = 4 round gridline steps, in binary units
+  if (max <= 0) return 1024;
+  let u = 1;
+  while (max / 4 / u >= 1024) u *= 1024;
+  return niceNum(max / 4 / u) * u * 4;
+}
+async function getJSON(url, opts) {
+  const r = await fetch(url, Object.assign({ cache: "no-store" }, opts));
+  if (!r.ok) throw new Error(r.status + " " + url);
+  return r.json();
+}
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+// ------------------------------------------------------------------ theme
+(function () {
+  const saved = lsGet("sysdash-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("theme").onclick = () => {
+    const cur = document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    lsSet("sysdash-theme", next);
+    redrawAll();
+  };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => redrawAll());
+})();
+
+// ------------------------------------------------------------------ time chart
+class TimeChart {
+  constructor(host, cfg) {
+    this.cfg = cfg;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = '<div class="chead"><h2></h2><div class="legend"></div></div>' +
+      '<div class="cbox"><canvas></canvas><div class="empty" style="display:none"></div><div class="tip"></div></div>';
+    card.querySelector("h2").textContent = cfg.title;
+    host.appendChild(card);
+    this.legend = card.querySelector(".legend");
+    this.box = card.querySelector(".cbox");
+    this.canvas = card.querySelector("canvas");
+    this.emptyEl = card.querySelector(".empty");
+    this.tip = card.querySelector(".tip");
+    this.hoverX = null;
+    this.legendVals = cfg.series.map((s) => {
+      const span = document.createElement("span");
+      span.innerHTML = '<i class="sw"></i>' + "<span></span> <b class='num'>–</b>";
+      span.querySelector("span").textContent = s.name;
+      this.legend.appendChild(span);
+      return span;
+    });
+    new ResizeObserver(() => this.draw()).observe(this.box);
+    const move = (e) => {
+      const r = this.box.getBoundingClientRect();
+      this.hoverX = e.clientX - r.left;
+      this.draw();
+    };
+    this.box.addEventListener("pointermove", move);
+    this.box.addEventListener("pointerdown", move);
+    this.box.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") { this.hoverX = null; this.draw(); } });
+    document.addEventListener("pointerdown", (e) => {
+      if (this.hoverX != null && !this.box.contains(e.target)) { this.hoverX = null; this.draw(); }
+    });
+  }
+  setData(d, x0, x1, bucket, info) {
+    this.d = d; this.x0 = x0; this.x1 = x1; this.bucket = bucket; this.info = info;
+    this.draw();
+  }
+  setLegendValues(sample) {
+    this.cfg.series.forEach((s, i) => {
+      this.legendVals[i].querySelector(".sw").style.background = SERIES(s.slot);
+      this.legendVals[i].querySelector("b").textContent = sample ? this.cfg.fmt(sample[s.key]) : "–";
+    });
+  }
+  draw() {
+    const cv = this.canvas, dpr = window.devicePixelRatio || 1;
+    const W = this.box.clientWidth, H = this.box.clientHeight;
+    if (!W || !H) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const cfg = this.cfg, d = this.d;
+    if (!d) return;
+    const msg = cfg.emptyMsg && cfg.emptyMsg(this.info);
+    this.emptyEl.style.display = msg ? "flex" : "none";
+    if (msg) { this.emptyEl.textContent = msg; this.tip.style.display = "none"; return; }
+
+    const t = d.t, n = t.length;
+    const L = 58, R = 10, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
+    const keys = cfg.series.map((s) => s.key);
+    // cumulative values for stacked charts
+    const vals = keys.map((k) => d[k]);
+    let tops = vals;
+    if (cfg.stacked) {
+      tops = [];
+      let acc = new Array(n).fill(0);
+      for (const v of vals) { acc = acc.map((a, i) => a + v[i]); tops.push(acc); }
+    }
+    // y domain
+    let yMin = 0, yMax;
+    if (cfg.yMax) yMax = cfg.yMax(this.info);
+    if (cfg.autoRange && n) {
+      let lo = Infinity, hi = -Infinity;
+      for (const v of vals) for (const x of v) { if (x < lo) lo = x; if (x > hi) hi = x; }
+      const span = Math.max(hi - lo, hi * 0.002, 1024 * 1024);
+      yMin = Math.max(0, lo - span * 0.6); yMax = hi + span * 0.6;
+    } else if (!yMax) {
+      let hi = 0;
+      for (const v of tops) for (const x of v) if (x > hi) hi = x;
+      yMax = cfg.bytes ? bytesCeil(hi * 1.05) : niceNum(Math.max(hi * 1.05, cfg.minMax || 1) / 4) * 4;
+    }
+    const X = (tt) => L + (tt - this.x0) / (this.x1 - this.x0) * pw;
+    const Y = (v) => T + ph - (v - yMin) / (yMax - yMin) * ph;
+
+    // grid + y labels
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.textBaseline = "middle"; ctx.textAlign = "right";
+    ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1; ctx.fillStyle = css("--text-muted");
+    for (let i = 0; i <= 4; i++) {
+      const v = yMin + (yMax - yMin) * i / 4, y = Math.round(Y(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+      ctx.fillText(cfg.axisFmt ? cfg.axisFmt(v, yMax) : cfg.fmt(v), L - 6, y);
+    }
+    // x labels
+    const spanS = this.x1 - this.x0;
+    const steps = [15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600];
+    let step = steps.find((s) => spanS / s <= Math.max(3, Math.floor(pw / 80))) || 21600;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    const tz = new Date().getTimezoneOffset() * 60;
+    for (let tt = Math.ceil((this.x0 - tz) / step) * step + tz; tt <= this.x1; tt += step) {
+      const x = X(tt);
+      if (x < L + 14 || x > W - R - 14) continue;
+      ctx.fillText(fmtClock(tt, step < 60), x, T + ph + 6);
+    }
+    if (!n) return;
+
+    // break lines where samples are missing (server down)
+    const gap = Math.max(this.bucket, 3) * 2.5;
+    const segs = []; let s0 = 0;
+    for (let i = 1; i <= n; i++) if (i === n || t[i] - t[i - 1] > gap) { segs.push([s0, i - 1]); s0 = i; }
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, T - 2, pw, ph + 4); ctx.clip();
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    cfg.series.forEach((s, k) => {
+      const col = SERIES(s.slot), top = tops[k], base = cfg.stacked && k > 0 ? tops[k - 1] : null;
+      for (const [a, b] of segs) {
+        // fill
+        if (cfg.stacked || cfg.series.length === 1) {
+          ctx.beginPath();
+          for (let i = a; i <= b; i++) ctx.lineTo(X(t[i]), Y(top[i]));
+          for (let i = b; i >= a; i--) ctx.lineTo(X(t[i]), Y(base ? base[i] : yMin));
+          ctx.closePath();
+          ctx.globalAlpha = cfg.stacked ? 0.55 : 0.16; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+        }
+        ctx.beginPath();
+        for (let i = a; i <= b; i++) ctx.lineTo(X(t[i]), Y(top[i]));
+        ctx.strokeStyle = col; ctx.lineWidth = cfg.stacked ? 1.5 : 2; ctx.stroke();
+      }
+    });
+    ctx.restore();
+
+    // hover crosshair + tooltip
+    if (this.hoverX == null || this.hoverX < L || this.hoverX > W - R) { this.tip.style.display = "none"; return; }
+    const ht = this.x0 + (this.hoverX - L) / pw * (this.x1 - this.x0);
+    let lo = 0, hi = n - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (t[m] < ht) lo = m + 1; else hi = m; }
+    if (lo > 0 && Math.abs(t[lo - 1] - ht) < Math.abs(t[lo] - ht)) lo--;
+    const i = lo;
+    if (Math.abs(t[i] - ht) > gap) { this.tip.style.display = "none"; return; }
+    const x = X(t[i]);
+    ctx.strokeStyle = css("--text-muted"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, T); ctx.lineTo(Math.round(x) + 0.5, T + ph); ctx.stroke();
+    cfg.series.forEach((s, k) => {
+      ctx.beginPath(); ctx.arc(x, Y(tops[k][i]), 4, 0, Math.PI * 2);
+      ctx.fillStyle = SERIES(s.slot); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = css("--surface-1"); ctx.stroke();
+    });
+    let html = '<div class="tt">' + fmtClock(t[i], true) +
+      (this.bucket > 3 ? " · avg of " + (this.bucket >= 60 ? this.bucket / 60 + " min" : this.bucket + " s") : "") + "</div>";
+    for (let k = cfg.series.length - 1; k >= 0; k--) {
+      const s = cfg.series[k];
+      html += '<div class="row"><i class="sw" style="background:' + SERIES(s.slot) + '"></i>' + s.name +
+        '<b class="num">' + cfg.fmt(d[s.key][i]) + "</b></div>";
+    }
+    if (cfg.tipExtra) html += cfg.tipExtra(d, i, this.info);
+    this.tip.innerHTML = html;
+    this.tip.style.display = "block";
+    const tw = this.tip.offsetWidth;
+    let tx = x + 12; if (tx + tw > W) tx = x - tw - 12; if (tx < 0) tx = 0;
+    this.tip.style.left = tx + "px"; this.tip.style.top = "4px";
+  }
+}
+
+// ------------------------------------------------------------------ chart definitions
+const chartHost = $("charts");
+const charts = [
+  new TimeChart(chartHost, {
+    title: "CPU", stacked: true, yMax: () => 100, fmt: (v) => fmtPct(v, 1), axisFmt: (v) => v.toFixed(0) + "%",
+    series: [{ key: "cpu_user", name: "user", slot: 1 }, { key: "cpu_sys", name: "system", slot: 2 },
+             { key: "cpu_iowait", name: "iowait", slot: 3 }, { key: "cpu_steal", name: "steal", slot: 4 }],
+    tipExtra: (d, i) => '<div class="tt" style="margin:3px 0 0">load ' + d.load1[i].toFixed(2) + "</div>",
+  }),
+  new TimeChart(chartHost, {
+    title: "Memory", stacked: true, bytes: true, yMax: (info) => info && info.mem_total,
+    fmt: (v) => fmtBytes(v), axisFmt: (v) => fmtBytes(v, 1),
+    series: [{ key: "mem_used", name: "used", slot: 1 }, { key: "mem_cache", name: "buff/cache", slot: 2 }],
+  }),
+  new TimeChart(chartHost, {
+    title: "Swap", bytes: true, yMax: (info) => info && info.swap_total,
+    fmt: (v) => fmtBytes(v), axisFmt: (v) => fmtBytes(v, 1),
+    emptyMsg: (info) => info && !info.swap_total ? "No swap configured" : "",
+    series: [{ key: "swap_used", name: "used", slot: 1 }],
+  }),
+  new TimeChart(chartHost, {
+    title: "Network", bytes: true, fmt: fmtRate, axisFmt: (v) => fmtBytes(v, 0) + "/s",
+    series: [{ key: "net_rx", name: "down", slot: 1 }, { key: "net_tx", name: "up", slot: 2 }],
+  }),
+  new TimeChart(chartHost, {
+    title: "Disk throughput", bytes: true, fmt: fmtRate, axisFmt: (v) => fmtBytes(v, 0) + "/s",
+    series: [{ key: "disk_read", name: "read", slot: 1 }, { key: "disk_write", name: "write", slot: 2 }],
+  }),
+  new TimeChart(chartHost, {
+    title: "Disk busy", yMax: () => 100, fmt: (v) => fmtPct(v, 1), axisFmt: (v) => v.toFixed(0) + "%",
+    series: [{ key: "disk_busy", name: "time with I/O in flight", slot: 1 }],
+  }),
+  new TimeChart(chartHost, {
+    title: "Disk space used", autoRange: true, bytes: true, fmt: (v) => fmtBytes(v, 2), axisFmt: (v) => fmtBytes(v, 2),
+    series: [{ key: "disk_used", name: "used", slot: 1 }],
+    tipExtra: (d, i, info) => info ? '<div class="tt" style="margin:3px 0 0">' +
+      fmtPct(100 * d.disk_used[i] / info.disk_total, 1) + " of " + fmtBytes(info.disk_total) + "</div>" : "",
+  }),
+];
+
+// ------------------------------------------------------------------ data loop
+const RANGES = [
+  { label: "5m", range: 300, bucket: 3 }, { label: "15m", range: 900, bucket: 3 },
+  { label: "1h", range: 3600, bucket: 12 }, { label: "6h", range: 21600, bucket: 60 },
+  { label: "24h", range: 86400, bucket: 240 },
+];
+let cur = RANGES[parseInt(lsGet("sysdash-range"), 10)] || RANGES[1];
+let hist = null, info = null, lastLive = null, uptimeBase = null, offline = false, gen = 0;
+
+RANGES.forEach((r, idx) => {
+  const b = document.createElement("button");
+  b.textContent = r.label;
+  b.setAttribute("aria-pressed", r === cur);
+  b.onclick = () => {
+    cur = r; lsSet("sysdash-range", idx); hist = null; gen++;
+    [...$("ranges").children].forEach((c, j) => c.setAttribute("aria-pressed", j === idx));
+    tick();
+  };
+  $("ranges").appendChild(b);
+});
+
+function mergeHistory(fresh) {
+  if (!hist || !hist.t.length) { hist = fresh; return; }
+  if (!fresh.t.length) return;
+  const first = fresh.t[0];
+  let cut = hist.t.length;
+  while (cut > 0 && hist.t[cut - 1] >= first) cut--;
+  for (const k in hist) hist[k] = hist[k].slice(0, cut).concat(fresh[k]);
+}
+function trimHistory(now) {
+  if (!hist) return;
+  const start = now - cur.range - cur.bucket;
+  let i = 0; while (i < hist.t.length && hist.t[i] < start) i++;
+  if (i) for (const k in hist) hist[k] = hist[k].slice(i);
+}
+
+let busy = false, pending = false;
+async function tick() {
+  if (busy) { pending = true; return; }
+  busy = true; pending = false;
+  const myGen = gen, rng = cur;
+  try {
+    const live = await getJSON("api/live");
+    info = live.info; lastLive = live;
+    uptimeBase = { up: live.uptime, at: performance.now() };
+    // history: full load on range change, otherwise only the newest bucket(s)
+    let since = 0;
+    if (hist && hist.t.length) since = cur.bucket > 3 ? hist.t[hist.t.length - 1] : hist.t[hist.t.length - 1] + 0.05;
+    const h = await getJSON("api/history?range=" + rng.range + "&bucket=" + rng.bucket + "&since=" + since);
+    if (myGen !== gen) return;  // range changed mid-request; the queued tick reloads
+    mergeHistory(h.data);
+    trimHistory(live.now);
+    setOnline(true);
+    render(live);
+    maybeLoadScan(live.scan);
+  } catch (e) {
+    setOnline(false);
+  } finally {
+    busy = false;
+    if (pending) tick();
+  }
+}
+function setOnline(on) {
+  offline = !on;
+  $("status").classList.toggle("offline", !on);
+  $("statustext").textContent = on ? "live" : "offline – retrying";
+}
+function render(live) {
+  const s = live.sample;
+  $("host").textContent = info.hostname;
+  document.title = info.hostname + " · dashboard";
+  $("sysmeta").textContent = info.os + " · kernel " + info.kernel + " · " + info.cpu_count + " vCPU" +
+    (info.cpu_model ? " (" + info.cpu_model.replace(/\s+/g, " ") + ")" : "") + " · " + fmtBytes(info.mem_total) + " RAM";
+  const now = live.now;
+  for (const c of charts) {
+    c.setData(hist, now - cur.range, now, cur.bucket, info);
+    c.setLegendValues(s);
+  }
+  if (!s) return;
+  setTile("cpu", fmtPct(s.cpu), "load " + live.load.map((x) => x.toFixed(2)).join(" / ") +
+    (s.cpu_steal >= 1 ? " · steal " + fmtPct(s.cpu_steal) : ""), s.cpu);
+  const mp = 100 * s.mem_used / info.mem_total;
+  setTile("mem", fmtPct(mp), fmtBytes(s.mem_used) + " of " + fmtBytes(info.mem_total) + " · " + fmtBytes(s.mem_avail) + " available", mp);
+  if (info.swap_total) {
+    const sp = 100 * s.swap_used / info.swap_total;
+    setTile("swap", fmtPct(sp), fmtBytes(s.swap_used) + " of " + fmtBytes(info.swap_total), sp);
+  } else setTile("swap", "none", "no swap configured", 0);
+  $("v-net").innerHTML = "↓ " + esc(fmtRate(s.net_rx));
+  $("s-net").textContent = "↑ " + fmtRate(s.net_tx) + " · " + info.net_ifaces.join(", ");
+  setTile("dio", fmtPct(s.disk_busy), "R " + fmtRate(s.disk_read) + " · W " + fmtRate(s.disk_write), s.disk_busy);
+  const fs = live.fs;
+  setTile("disk", fmtPct(fs.pct), fmtBytes(fs.used) + " used · " + fmtBytes(fs.avail) + " free of " + fmtBytes(fs.total), fs.pct);
+  $("foot").textContent = "Samples every 3 s · showing last " + cur.label +
+    (cur.bucket > 3 ? " (averaged per " + (cur.bucket >= 60 ? cur.bucket / 60 + " min" : cur.bucket + " s") + ")" : "") +
+    " · last sample " + fmtClock(s.t, true);
+}
+function setTile(id, value, sub, pct) {
+  $("v-" + id).textContent = value;
+  $("s-" + id).textContent = sub;
+  const m = $("m-" + id);
+  if (m) { m.style.width = Math.max(0, Math.min(100, pct)) + "%"; m.style.background = SERIES(1); }
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+setInterval(() => {
+  if (uptimeBase) $("uptime").textContent = fmtUptime(uptimeBase.up + (performance.now() - uptimeBase.at) / 1000);
+}, 250);
+setInterval(tick, 3000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+tick();
+
+// ------------------------------------------------------------------ treemap
+const tm = { data: null, meta: null, view: [], leaves: [], dirs: [], extColor: new Map(), sel: null, hover: null, loadedAt: 0 };
+const tmCanvas = $("tm"), tmOver = $("tmo"), tmBox = $("tmbox");
+
+let scanLoading = false;
+async function loadScan() {
+  if (scanLoading) return;
+  scanLoading = true;
+  try {
+    const r = await getJSON("api/scan");
+    if (!r.tree) return;
+    tm.data = r.tree; tm.meta = r.meta; tm.loadedAt = r.meta.finished;
+    tm.view = [tm.data]; tm.sel = null; tm.hover = null;
+    computeExtColors();
+    $("tmempty").style.display = "none";
+    layoutTreemap(); drawTreemap(); renderCrumbs(); renderInfo(null); renderUsage(); renderScanMeta(lastLive && lastLive.scan);
+  } catch (e) { /* retried on next tick */ }
+  finally { scanLoading = false; }
+}
+function maybeLoadScan(st) {
+  renderScanMeta(st);
+  if (st && st.last && st.last.finished !== tm.loadedAt && !st.running) loadScan();
+  $("rescan").disabled = !!(st && st.running);
+  if (st && st.running && !tm.data) $("tmempty").textContent = "Scanning… " + st.progress.files.toLocaleString() + " files, " + fmtBytes(st.progress.bytes);
+}
+function renderScanMeta(st) {
+  const el = $("scanmeta");
+  if (st && st.running) { el.textContent = "scanning… " + st.progress.files.toLocaleString() + " files · " + fmtBytes(st.progress.bytes); return; }
+  if (!tm.meta) { el.textContent = ""; return; }
+  const m = tm.meta;
+  el.textContent = "scanned " + fmtAgo(Date.now() / 1000 - m.finished) + " · " + m.files.toLocaleString() + " files in " + m.duration + " s" +
+    (m.errors ? " · " + m.errors + " unreadable" : "");
+}
+$("rescan").onclick = async () => {
+  $("rescan").disabled = true;
+  try { await getJSON("api/scan", { method: "POST" }); } catch (e) {}
+  tick();
+};
+$("showfree").onchange = () => { layoutTreemap(); drawTreemap(); };
+
+function extOf(name) {
+  name = name.toLowerCase();
+  if (/\.so(\.\d+)+$/.test(name)) return "so";          // libfoo.so.1.2
+  if (/\.(log|gz)\.\d+$/.test(name)) name = name.replace(/\.\d+$/, ""); // rotated logs: x.log.1
+  const i = name.lastIndexOf(".");
+  if (i <= 0 || i === name.length - 1 || name.length - i > 9) return "";
+  const e = name.slice(i + 1);
+  return /^[a-z0-9_+]*[a-z][a-z0-9_+]*$/.test(e) ? e : "";
+}
+function computeExtColors() {
+  const sums = new Map();
+  (function walk(n) {
+    if (n.c) { for (const k of n.c) walk(k); return; }
+    if (n.o) return;
+    const e = extOf(n.n);
+    sums.set(e, (sums.get(e) || 0) + n.s);
+  })(tm.data);
+  const top = [...sums.entries()].filter(([e]) => e).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  tm.extColor = new Map(top.map(([e], i) => [e, i + 1]));
+  tm.extSums = top;
+  const leg = $("extleg");
+  leg.innerHTML = "";
+  const add = (color, label, size) => {
+    const s = document.createElement("span");
+    s.innerHTML = '<i class="sw" style="background:' + color + '"></i>' + esc(label) + ' <b class="num">' + esc(size) + "</b>";
+    leg.appendChild(s);
+  };
+  top.forEach(([e, sz], i) => add(SERIES(i + 1), "." + e, fmtBytes(sz)));
+  add(css("--tm-other"), "other files / small items", "");
+  add(css("--tm-dir"), "folders too small to split", "");
+  add(css("--tm-free"), "free space", "");
+}
+function nodeColor(n) {
+  if (n.free) return css("--tm-free");
+  if (n.unacc) return css("--tm-unacc");
+  if (n.c) return css("--tm-dir");
+  if (n.o) return css("--tm-other");
+  const slot = tm.extColor.get(extOf(n.n));
+  return slot ? SERIES(slot) : css("--tm-other");
+}
+function viewRootNode() {
+  const v = tm.view[tm.view.length - 1];
+  if (tm.view.length > 1 || !$("showfree").checked || !tm.meta) return v;
+  // top level: add free space + space the scan couldn't attribute
+  const extra = [{ n: "Free space", s: tm.meta.fs_avail, free: 1 }];
+  const unacc = tm.meta.fs_used - tm.meta.bytes;
+  if (unacc > tm.meta.fs_used * 0.005) extra.push({ n: "Unaccounted (fs metadata, reserved blocks, unreadable)", s: unacc, unacc: 1 });
+  return Object.assign({}, v, { c: v.c.concat(extra).sort((a, b) => b.s - a.s), s: v.s + extra.reduce((a, b) => a + b.s, 0), virt: true });
+}
+function joinPath(base, name) { return base === "/" ? "/" + name : base.replace(/\/$/, "") + "/" + name; }
+function viewPath() {
+  let p = tm.data.n;
+  for (let i = 1; i < tm.view.length; i++) p = joinPath(p, tm.view[i].n);
+  return p;
+}
+
+function squarify(items, x, y, w, h, place) {
+  let i = 0;
+  while (i < items.length) {
+    const short = Math.min(w, h);
+    if (short <= 0) return;
+    let sum = 0, mn = Infinity, mx = 0, j = i, best = Infinity;
+    while (j < items.length) {
+      const v = items[j].v, s2 = sum + v, mn2 = Math.min(mn, v), mx2 = Math.max(mx, v);
+      const ss = short * short, worst = Math.max(ss * mx2 / (s2 * s2), (s2 * s2) / (ss * mn2));
+      if (worst > best) break;
+      best = worst; sum = s2; mn = mn2; mx = mx2; j++;
+    }
+    if (w >= h) {  // lay the row as a column on the left
+      const rw = sum / h; let yy = y;
+      for (let k = i; k < j; k++) { const hh = items[k].v / rw; place(items[k], x, yy, rw, hh); yy += hh; }
+      x += rw; w -= rw;
+    } else {       // lay the row along the top
+      const rh = sum / w; let xx = x;
+      for (let k = i; k < j; k++) { const ww = items[k].v / rh; place(items[k], xx, y, ww, rh); xx += ww; }
+      y += rh; h -= rh;
+    }
+    i = j;
+  }
+}
+const HEADER = 15;
+function layoutTreemap() {
+  tm.leaves = []; tm.dirs = [];
+  if (!tm.data) return;
+  const W = tmBox.clientWidth, H = tmBox.clientHeight;
+  const root = viewRootNode(), base = viewPath();
+  (function layout(node, x, y, w, h, depth, path, parent) {
+    const rec = { x, y, w, h, node, depth, path, parent };
+    if (node.c && node.c.length && w >= 3 && h >= 3) {
+      let ix = x, iy = y, iw = w, ih = h;
+      if (depth > 0) {
+        ix += 1; iy += 1; iw -= 2; ih -= 2;
+        if (iw > 90 && ih > 46) { rec.header = true; iy += HEADER; ih -= HEADER; }
+      }
+      tm.dirs.push(rec);
+      const kids = node.c.filter((k) => k.s > 0);
+      const total = kids.reduce((a, k) => a + k.s, 0);
+      if (!total || iw <= 0 || ih <= 0) return;
+      const scale = iw * ih / total;
+      squarify(kids.map((k) => ({ node: k, v: k.s * scale })), ix, iy, iw, ih, (it, a, b, c, d) => {
+        const p = it.node.free || it.node.unacc ? null : joinPath(path, it.node.n);
+        layout(it.node, a, b, c, d, depth + 1, p, rec);
+      });
+    } else tm.leaves.push(rec);
+  })(root, 0, 0, W, H, 0, base, null);
+}
+function shade(ctx, r, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  if (r.w < 3 || r.h < 3) return;
+  // "cushion" lighting: bright top-left, dark bottom-right
+  const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+  g.addColorStop(0, "rgba(255,255,255,0.32)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.04)");
+  g.addColorStop(1, "rgba(0,0,0,0.32)");
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+}
+function sizeCanvas(cv, ctxOnly) {
+  const dpr = window.devicePixelRatio || 1, W = tmBox.clientWidth, H = tmBox.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  return ctx;
+}
+function clipText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ctx.measureText(text.slice(0, m) + "…").width <= maxW) lo = m; else hi = m - 1; }
+  return lo ? text.slice(0, lo) + "…" : "";
+}
+function drawTreemap() {
+  const ctx = sizeCanvas(tmCanvas);
+  if (!tm.data) return;
+  const surf = css("--surface-1"), hdr = css("--surface-3"), txt = css("--text-primary"), txt2 = css("--text-secondary");
+  // folder frames + headers
+  for (const d of tm.dirs) {
+    if (d.depth === 0) continue;
+    ctx.fillStyle = surf; ctx.fillRect(d.x, d.y, d.w, d.h);
+    if (d.header) {
+      ctx.fillStyle = hdr; ctx.fillRect(d.x + 1, d.y + 1, d.w - 2, HEADER);
+    }
+  }
+  // files
+  const hatch = css("--text-muted");
+  for (const r of tm.leaves) {
+    if (r.node.free) {
+      ctx.fillStyle = css("--tm-free"); ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+      ctx.strokeStyle = hatch; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+      for (let k = -r.h; k < r.w; k += 10) { ctx.beginPath(); ctx.moveTo(r.x + k, r.y + r.h); ctx.lineTo(r.x + k + r.h, r.y); ctx.stroke(); }
+      ctx.restore();
+    } else shade(ctx, r, nodeColor(r.node));
+    if (r.w > 1.5 && r.h > 1.5) { ctx.strokeStyle = surf; ctx.lineWidth = 0.6; ctx.strokeRect(r.x, r.y, r.w, r.h); }
+  }
+  // labels
+  ctx.textBaseline = "middle";
+  ctx.font = "600 11px system-ui, sans-serif";
+  for (const d of tm.dirs) {
+    if (!d.header) continue;
+    ctx.fillStyle = txt;
+    const label = d.node.n + "  " + fmtBytes(d.node.s);
+    ctx.fillText(clipText(ctx, label, d.w - 10), d.x + 5, d.y + 1 + HEADER / 2);
+  }
+  ctx.font = "11px system-ui, sans-serif";
+  for (const r of tm.leaves) {
+    if (r.w < 64 || r.h < 18) continue;
+    ctx.fillStyle = r.node.free || r.node.unacc ? txt2 : "#0b0b0b";
+    const t1 = clipText(ctx, r.node.n, r.w - 8);
+    if (!t1) continue;
+    if (r.h >= 34) {
+      ctx.fillText(t1, r.x + 4, r.y + 11);
+      ctx.fillText(clipText(ctx, fmtBytes(r.node.s), r.w - 8), r.x + 4, r.y + 25);
+    } else ctx.fillText(t1, r.x + 4, r.y + r.h / 2);
+  }
+  drawOverlay();
+}
+function drawOverlay() {
+  const ctx = sizeCanvas(tmOver);
+  const r = tm.hover || tm.sel;
+  if (!r) return;
+  ctx.strokeStyle = css("--text-secondary"); ctx.lineWidth = 1;
+  for (let p = r.parent; p && p.depth > 0; p = p.parent) ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1);
+  ctx.strokeStyle = css("--text-primary"); ctx.lineWidth = 2;
+  ctx.strokeRect(r.x + 1, r.y + 1, Math.max(0, r.w - 2), Math.max(0, r.h - 2));
+}
+function hitTest(e) {
+  const b = tmBox.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+  for (const r of tm.leaves) if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return r;
+  // a folder header strip
+  for (let i = tm.dirs.length - 1; i >= 0; i--) {
+    const d = tm.dirs[i];
+    if (d.header && x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + HEADER + 1) return d;
+  }
+  return null;
+}
+// the folder to open: the clicked item's ancestor one level below the current view
+function zoomTarget(r) {
+  if (!r) return null;
+  let a = r;
+  while (a && a.depth > 1) a = a.parent;
+  return a && a.node.c ? a : null;
+}
+function zoomTo(rec) {
+  if (!rec) return;
+  const chain = [];
+  for (let p = rec; p && p.depth > 0; p = p.parent) chain.unshift(p.node);
+  tm.view = tm.view.concat(chain);
+  tm.sel = tm.hover = null;
+  layoutTreemap(); drawTreemap(); renderCrumbs(); renderInfo(null);
+}
+function renderCrumbs() {
+  const el = $("crumbs"); el.innerHTML = "";
+  tm.view.forEach((n, i) => {
+    if (i) { const s = document.createElement("span"); s.className = "sep"; s.textContent = "›"; el.appendChild(s); }
+    const a = document.createElement("a");
+    a.textContent = i === 0 ? n.n : n.n;
+    a.onclick = () => { tm.view = tm.view.slice(0, i + 1); tm.sel = tm.hover = null; layoutTreemap(); drawTreemap(); renderCrumbs(); renderInfo(null); };
+    el.appendChild(a);
+  });
+}
+function renderUsage() {
+  const m = tm.meta, el = $("usage");
+  el.innerHTML = "";
+  if (!m) return;
+  const used = document.createElement("i");
+  used.style.width = (100 * m.fs_used / (m.fs_used + m.fs_avail)) + "%";
+  used.style.background = SERIES(1);
+  el.appendChild(used);
+  el.title = fmtBytes(m.fs_used) + " used · " + fmtBytes(m.fs_avail) + " free (of " + fmtBytes(m.fs_total) + ")";
+}
+function renderInfo(r) {
+  const el = $("tminfo");
+  if (!r) { el.innerHTML = '<span class="muted">Hover or tap a block for details. Double-click (or use the button) to zoom into a folder.</span>'; return; }
+  const n = r.node, viewSize = tm.view[tm.view.length - 1].s, m = tm.meta;
+  let kind = n.free ? "free space" : n.unacc ? "not attributed to files" : n.o ? "many small items grouped" : n.c ? "folder · " + (n.f || 0).toLocaleString() + " files" : "file";
+  let html = '<span class="path">' + esc(r.path || n.n) + "</span><b class='num'>" + esc(fmtBytes(n.s)) + "</b>" +
+    '<span class="muted num">' + esc(kind) + (n.free || n.unacc ? "" : " · " + fmtPct(100 * n.s / viewSize, 1) + " of view") +
+    " · " + fmtPct(100 * n.s / m.fs_total, 2) + " of disk</span>";
+  const z = zoomTarget(r);
+  if (z && z.node.c) html += '<button class="btn" id="zoombtn">Open ' + esc(z.node.n) + "</button>";
+  el.innerHTML = html;
+  const zb = $("zoombtn"); if (zb) zb.onclick = () => zoomTo(z);
+}
+tmBox.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse" || !tm.data) return;
+  const r = hitTest(e);
+  if (r !== tm.hover) { tm.hover = r; drawOverlay(); renderInfo(r || tm.sel); }
+});
+tmBox.addEventListener("pointerleave", () => { tm.hover = null; drawOverlay(); renderInfo(tm.sel); });
+tmBox.addEventListener("click", (e) => { if (!tm.data) return; tm.sel = hitTest(e); tm.hover = null; drawOverlay(); renderInfo(tm.sel); });
+tmBox.addEventListener("dblclick", (e) => { if (tm.data) zoomTo(zoomTarget(hitTest(e))); });
+let tmResize = 0;
+new ResizeObserver(() => { clearTimeout(tmResize); tmResize = setTimeout(() => { layoutTreemap(); drawTreemap(); }, 120); }).observe(tmBox);
+
+function redrawAll() {
+  requestAnimationFrame(() => {
+    for (const c of charts) { c.draw(); c.setLegendValues(lastLive && lastLive.sample); }
+    if (lastLive) render(lastLive);
+    if (tm.data) { computeExtColors(); drawTreemap(); renderUsage(); }
+  });
+}
+</script>
+</body>
+</html>
