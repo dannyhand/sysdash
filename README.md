@@ -1,7 +1,7 @@
 # sysdash
 
 A live dashboard for one Linux server: CPU, memory, swap, network, disk I/O, disk space,
-and uptime, with 3-second history. It also has a WinDirStat-style map of disk usage.
+and uptime, with 24-hour history, in 3-second intervals (both adjustable). It also has a WinDirStat-style map of disk usage.
 
 - **Backend:** `sysdash.py`. It needs only Python 3.8 or newer, with no pip packages. It reads `/proc`
   and listens on 127.0.0.1:8765, so the internet can't reach it directly.
