@@ -8,6 +8,14 @@ and uptime, with 3-second history. It also has a WinDirStat-style map of disk us
 - **Frontend:** `www/index.html`. It's a single page with no CDN and no libraries.
 - **Apache:** serves it at `/dashboard/` behind a username and password.
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/sysdash-v1.0.0-a.jpg" alt="Screen 1" width="30%" />
+  <img src="screenshots/sysdash-v1.0.0-b.jpg" alt="Screen 2" width="30%" />
+<img src="screenshots/sysdash-v1.0.0-c.jpg" alt="Screen 3" width="30%" />
+</p>
+
 ## Install
 
 ```bash
